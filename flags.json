@@ -1,0 +1,59 @@
+{
+  "insulin_resistant": {
+    "sugar_g": 12,
+    "caffeine_mg": 80,
+    "sodium_mg": 800,
+    "keywords": {
+      "maltodextrin": 25,
+      "dextrose": 25,
+      "high fructose corn": 28,
+      "hfcs": 28,
+      "corn syrup": 22,
+      "refined flour": 18,
+      "white flour": 16,
+      "enriched flour": 14
+    },
+    "oils": ["soybean oil", "canola oil", "vegetable oil", "corn oil", "sunflower oil"],
+    "swap": "Try plain Greek yogurt with berries and nuts instead of sweetened snacks."
+  },
+  "adrenal": {
+    "sugar_g": 12,
+    "caffeine_mg": 80,
+    "sodium_mg": 800,
+    "keywords": {
+      "msg": 20,
+      "sodium nitrite": 22,
+      "artificial": 15,
+      "preservative": 14
+    },
+    "oils": [],
+    "swap": "Choose herbal tea, low-sodium whole foods, and skip energy drinks."
+  },
+  "post_pill": {
+    "sugar_g": 12,
+    "caffeine_mg": 80,
+    "sodium_mg": 800,
+    "keywords": {
+      "carrageenan": 18,
+      "polysorbate": 16,
+      "artificial color": 20,
+      "red 40": 22,
+      "whey protein concentrate": 12
+    },
+    "oils": [],
+    "swap": "Pick minimally processed meals with leafy greens and zinc-rich foods like pumpkin seeds."
+  },
+  "lean_inflammatory": {
+    "sugar_g": 12,
+    "caffeine_mg": 80,
+    "sodium_mg": 800,
+    "keywords": {
+      "wheat gluten": 20,
+      "vital wheat gluten": 24,
+      "enriched wheat": 16,
+      "hydrolyzed": 18
+    },
+    "oils": ["soybean oil", "canola oil", "vegetable oil", "sunflower oil", "corn oil"],
+    "swap": "Swap for olive oil–based dishes with fish or legumes and gluten-free grains."
+  }
+}
