@@ -1,8 +1,8 @@
-"""
-EatWise — metabolic-first PCOS support (Streamlit).
-"""
+def _render_symptom_diary_page() -> None:
+    st.subheader("Symptom Diary")
+    st.info("This is a placeholder for the Symptom Diary feature. You can add your daily symptoms, notes, or other relevant information here in the future.")
 
-from __future__ import annotations
+
 
 import hashlib
 import json
@@ -119,10 +119,81 @@ def _init_session() -> None:
         "survey": {},
         "phenotype_key": None,
         "eatwise_view": "landing",
+        "auth_user": None,
+        "auth_mode": "signin",  # or "signup"
     }
-    for k, v in defaults.items():
-        if k not in st.session_state:
-            st.session_state[k] = v
+
+
+def _render_landing() -> None:
+    # Only show nav bar, EatWise, and main content. Removed extra hero/header section above nav.
+    st.markdown(
+        """
+**1 in 10 women have PCOS.** Every doctor says the same thing. We don't.
+
+Take our diagnostic survey at onboarding — it clusters each user into her metabolic phenotype. Every subsequent recommendation is filtered through this lens:
+
+- **Type A: Insulin Resistant** — Weight, blood sugar, androgen spikes  
+- **Type B: Adrenal** — Cortisol dysregulation, stress response  
+- **Type C: Inflammatory** — Acne, gut health, systemic inflammation  
+- **Type D: Post-Pill** — Hormonal rebound after stopping birth control pills  
+        """
+    )
+    st.markdown("")
+    if st.button("Check In", type="primary", key="landing_discover"):
+        if not st.session_state.get("auth_user"):
+            st.session_state.eatwise_view = "auth"
+            st.rerun()
+        else:
+            st.session_state.eatwise_view = "platform"
+            st.rerun()
+
+def _render_auth_page() -> None:
+    # Session state is initialized in main()
+    if 'auth_mode' not in st.session_state:
+        st.session_state.auth_mode = 'signin'
+    mode = st.radio("Choose authentication mode", ["Sign In", "Sign Up"], index=0 if st.session_state.auth_mode == "signin" else 1, horizontal=True, key="auth_mode_radio")
+    st.session_state.auth_mode = "signin" if mode == "Sign In" else "signup"
+    mode_key = st.session_state.auth_mode
+    email = st.text_input("Email", key=f"auth_email_{mode_key}")
+    password = st.text_input("Password", type="password", key=f"auth_password_{mode_key}")
+    if st.session_state.auth_mode == "signup":
+        password2 = st.text_input("Confirm Password", type="password", key=f"auth_password2_{mode_key}")
+    else:
+        password2 = None
+    if st.button("Continue", key=f"auth_continue_{mode_key}", type="primary"):
+        if not email or not password or (st.session_state.auth_mode == "signup" and password != password2):
+            st.error("Please fill all fields and make sure passwords match.")
+        else:
+            st.session_state.auth_user = {"email": email}
+            st.session_state.eatwise_view = "platform"
+            st.rerun()
+    if 'auth_user' not in st.session_state:
+        st.session_state.auth_user = None
+    if st.session_state.auth_user:
+        st.success(f"Signed in as {st.session_state.auth_user['email']}")
+        if st.button("Sign out", key="auth_signout"):
+            st.session_state.auth_user = None
+            st.session_state.eatwise_view = "landing"
+            st.rerun()
+    st.divider()
+
+
+# Ensure about page is defined at the top level
+def _render_about_page() -> None:
+    st.markdown("# EatWise")
+    st.subheader("About")
+    st.markdown("""
+EatWise is the first AI phenotyping platform for PCOS. Our mission is to empower women with PCOS to understand their metabolic phenotype and receive personalized, evidence-based recommendations for nutrition, movement, and lifestyle.
+
+**Features:**
+- Diagnostic onboarding survey to determine your metabolic phenotype
+- Personalized dashboard and recommendations
+- Food label scanner with AI-powered analysis
+- Symptom diary and recipe management
+- Exportable medical summary PDF for clinician visits
+
+EatWise is not a substitute for medical advice. Always consult your healthcare provider for diagnosis and treatment.
+    """)
 
 
 def _render_nav() -> None:
@@ -150,62 +221,6 @@ def _render_nav() -> None:
                     st.session_state.eatwise_view = key
                     st.rerun()
     st.divider()
-
-
-def _render_landing() -> None:
-    st.markdown(
-        """
-        <div class="eatwise-hero">
-            <div class="eatwise-hero-tagline">The first AI phenotyping platform for PCOS</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        """
-**1 in 10 women have PCOS.** Every doctor says the same thing. We don't.
-
-Take our diagnostic survey at onboarding — it clusters each user into her metabolic phenotype. Every subsequent recommendation is filtered through this lens:
-
-- **Type A: Insulin Resistant** — Weight, blood sugar, androgen spikes  
-- **Type B: Adrenal** — Cortisol dysregulation, stress response  
-- **Type C: Inflammatory** — Acne, gut health, systemic inflammation  
-- **Type D: Post-Pill** — Hormonal rebound after stopping birth control pills  
-        """
-    )
-    st.markdown("")
-    if st.button("Discover Your Recommendations", type="primary", key="landing_discover"):
-        st.session_state.eatwise_view = "platform"
-        st.rerun()
-
-
-def _render_about_page() -> None:
-    st.subheader("About EatWise")
-    st.markdown(
-        """
-EatWise is built for the majority of people with PCOS who are told the same generic advice — lose weight, go on the pill — without a clear picture of **which** metabolic drivers matter for *you*.
-
-We use a structured onboarding survey to sort patterns into phenotypes, not labels. The goal is practical: recommendations you can discuss with your clinician and live with day to day.
-
-EatWise is a **soft-clinical companion**. It does not diagnose or replace medical care.
-        """
-    )
-
-
-def _render_recipes_page() -> None:
-    _render_recipes_tab()
-
-
-def _render_symptom_diary_page() -> None:
-    st.subheader("Symptom Diary")
-    st.markdown(
-        """
-Log cycle changes, skin flares, energy, sleep, and stress — so you can see patterns over time **in one place** alongside your phenotype. This feature is coming next.
-        """
-    )
-    st.info("Symptom logging will connect to your dashboard for richer, longitudinal context.")
-
-
 def _render_platform_app() -> None:
     st.caption("Metabolic health for PCOS — a soft-clinical companion, not a substitute for your clinician.")
 
@@ -257,11 +272,32 @@ def _render_platform_app() -> None:
 
 
 def _render_survey_wizard() -> None:
+    if 'wizard_step' not in st.session_state:
+        st.session_state.wizard_step = 0
     step = st.session_state.wizard_step
-    total = 3
+    total = 4
     st.progress((step + 1) / total, text=f"Step {step + 1} of {total}")
 
     if step == 0:
+        st.subheader("General Information")
+        name = st.text_input("Full Name", key="w_name")
+        age = st.number_input("Age", min_value=0, max_value=120, value=30, key="w_age")
+        country = st.text_input("Country", key="w_country")
+        ethnicity = st.text_input("Ethnicity", key="w_ethnicity")
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("Next", type="primary"):
+                st.session_state._draft = {
+                    "name": name,
+                    "age": age,
+                    "country": country,
+                    "ethnicity": ethnicity,
+                }
+                st.session_state.wizard_step = 1
+                st.rerun()
+        return
+
+    if step == 1:
         st.subheader("Cycle & skin")
         cycle = st.selectbox(
             "Cycle regularity",
@@ -281,13 +317,111 @@ def _render_survey_wizard() -> None:
         hair = st.radio("Hair thinning", ["No", "Yes"], horizontal=True, key="w_hair")
         c1, c2 = st.columns(2)
         with c1:
+            if st.button("Back"):
+                st.session_state.wizard_step = 0
+                st.rerun()
+        with c2:
             if st.button("Next", type="primary"):
-                st.session_state._draft = {
+                d = dict(st.session_state.get("_draft", {}))
+                d.update({
                     "cycle_regularity": cycle,
                     "acne_severity": acne,
                     "hair_thinning": hair,
-                }
+                })
+                st.session_state._draft = d
+                st.session_state.wizard_step = 2
+                st.rerun()
+        return
+
+    # The rest of the steps increment by 1 (was step 1/2, now 2/3)
+    if step == 2:
+        st.subheader("Body composition & daily load")
+        bmi = st.number_input("BMI", min_value=15.0, max_value=60.0, value=26.0, step=0.1, key="w_bmi")
+        stress = st.slider("Stress levels (1 = low, 5 = high)", 1, 5, 3, key="w_stress")
+        energy = st.slider("Energy levels (1 = low, 5 = high)", 1, 5, 3, key="w_energy")
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("Back"):
                 st.session_state.wizard_step = 1
+                st.rerun()
+        with c2:
+            if st.button("Next", type="primary"):
+                d = dict(st.session_state.get("_draft", {}))
+                d.update({
+                    "bmi": bmi,
+                    "stress_level": stress,
+                    "energy_level": energy,
+                })
+                st.session_state._draft = d
+                st.session_state.wizard_step = 3
+                st.rerun()
+        return
+
+    if step == 3:
+        st.subheader("Metabolic pattern clues")
+        sugar = st.selectbox(
+            "Sugar cravings",
+            ["Low", "Moderate", "High (especially under stress)"],
+            key="w_sugar",
+        )
+        weight_pattern = st.selectbox(
+            "Where weight tends to sit",
+            [
+                "Mostly around my midsection",
+                "Upper body / midsection",
+                "Evenly distributed",
+                "Lower body",
+            ],
+            key="w_weight",
+        )
+        sleep_trouble = st.selectbox(
+            "Sleep difficulty",
+            ["Rarely", "Sometimes", "Often / I wake wired or tired"],
+            key="w_sleep",
+        )
+        digestive = st.selectbox(
+            "Digestive issues (bloating, IBS-type symptoms)",
+            ["No", "Sometimes", "Yes, often"],
+            key="w_gi",
+        )
+        joint = st.radio("Joint pain", ["No", "Yes"], horizontal=True, key="w_joint")
+        post_pill = st.selectbox(
+            "Hormonal birth control (recent stop)",
+            [
+                "No",
+                "Yes, within the last 1-2 years",
+                "Yes, more than 2 years ago",
+            ],
+            key="w_pill",
+        )
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("Back"):
+                st.session_state.wizard_step = 2
+                st.rerun()
+        with c2:
+            if st.button("Finish & see my phenotype", type="primary"):
+                d = dict(st.session_state.get("_draft", {}))
+                # Normalize post_pill strings to match phenotype_engine
+                pill_map = {
+                    "No": "No",
+                    "Yes, within the last 1-2 years": "Yes, within the last 1–2 years",
+                    "Yes, more than 2 years ago": "Yes, more than 2 years ago",
+                }
+                d.update({
+                    "sugar_cravings": sugar,
+                    "weight_pattern": weight_pattern,
+                    "sleep_trouble": sleep_trouble,
+                    "digestive_issues": digestive,
+                    "joint_pain": joint,
+                    "post_pill": pill_map[post_pill],
+                })
+                st.session_state.survey = d
+                st.session_state.phenotype_key = get_phenotype(d)
+                st.session_state.survey_complete = True
+                st.session_state.wizard_step = 0
+                if "_draft" in st.session_state:
+                    del st.session_state._draft
                 st.rerun()
         return
 
@@ -447,6 +581,8 @@ Export a **medical summary PDF** from the dashboard when you want something conc
         """
     )
 
+    if 'survey_complete' not in st.session_state:
+        st.session_state.survey_complete = False
     if not st.session_state.survey_complete:
         st.info(
             "Use **Discover Your Recommendations** on the home page to complete the survey. "
@@ -554,6 +690,8 @@ def _render_scanner_sidebar() -> None:
     st.markdown("**Food label scanner**")
     _ensure_openai_key()
     has_key = bool(os.environ.get("OPENAI_API_KEY"))
+    if 'survey_complete' not in st.session_state:
+        st.session_state.survey_complete = False
     if not st.session_state.survey_complete:
         st.caption("Complete the survey to personalize the AI lens.")
         return
@@ -683,6 +821,7 @@ def main() -> None:
         layout="wide",
         initial_sidebar_state="expanded",
     )
+
     _inject_soft_clinical_css()
     _ensure_openai_key()
     _init_session()
@@ -697,9 +836,16 @@ def main() -> None:
     elif view == "solution":
         _render_solution_page()
     elif view == "recipes":
-        _render_recipes_page()
+        _render_recipes_tab()
     elif view == "symptom_diary":
         _render_symptom_diary_page()
+    elif view == "auth":
+        _render_auth_page()
+    elif view == "platform":
+        if st.session_state.auth_user is None:
+            st.session_state.eatwise_view = "auth"
+            st.rerun()
+        _render_platform_app()
     else:
         _render_platform_app()
 
