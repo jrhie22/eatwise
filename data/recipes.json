@@ -1,0 +1,65 @@
+[
+  {
+    "id": "seed-1",
+    "title": "Greek yogurt bowl with berries",
+    "ingredients": "Plain Greek yogurt\nMixed berries\nChia seeds\nWalnuts",
+    "steps": {
+      "prep_style": "Minimal chop only",
+      "cook_method": "No heat (raw or chilled)",
+      "active_time_band": "Under 15 minutes",
+      "make_ahead": "Fine 1 day ahead"
+    },
+    "goals_fit": "Higher protein, lower added sugar for steady energy.",
+    "pcos_rules": {
+      "low_gi": true,
+      "anti_inflammatory": true,
+      "fiber_grams": 8.0
+    },
+    "status": "Example",
+    "phenotype_key": null,
+    "display_name": "EatWise",
+    "created_at": "2026-01-15T12:00:00+00:00"
+  },
+  {
+    "id": "seed-2",
+    "title": "Sheet-pan salmon and greens",
+    "ingredients": "Salmon fillet\nOlive oil\nLemon\nAsparagus or broccoli",
+    "steps": {
+      "prep_style": "Moderate prep",
+      "cook_method": "Oven",
+      "active_time_band": "15\u201330 minutes",
+      "make_ahead": "Best eaten same day"
+    },
+    "goals_fit": "Omega-3s and simple carbs from vegetables.",
+    "pcos_rules": {
+      "low_gi": true,
+      "anti_inflammatory": true,
+      "fiber_grams": 6.0
+    },
+    "status": "Example",
+    "phenotype_key": null,
+    "display_name": "EatWise",
+    "created_at": "2026-01-10T12:00:00+00:00"
+  },
+  {
+    "id": "31433e97-1998-45c8-ade8-5bbfcb9f27da",
+    "title": "name",
+    "ingredients": "name",
+    "steps": {
+      "prep_style": "No-cook",
+      "cook_method": "No heat (raw or chilled)",
+      "active_time_band": "Under 15 minutes",
+      "make_ahead": "Best eaten same day"
+    },
+    "goals_fit": "name",
+    "pcos_rules": {
+      "low_gi": true,
+      "anti_inflammatory": true,
+      "fiber_grams": 0.0
+    },
+    "status": "Submitted",
+    "phenotype_key": "A",
+    "display_name": null,
+    "created_at": "2026-04-18T21:10:41.425457+00:00"
+  }
+]

@@ -15,11 +15,11 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/eatwise';
+const MONGODB_URL = process.env.MONGODB_URL || 'mongodb://localhost:27017/eatwise';
 
 // MongoDB connection
 let db;
-MongoClient.connect(MONGODB_URI, { useUnifiedTopology: true })
+MongoClient.connect(MONGODB_URL, { useUnifiedTopology: true })
   .then(client => {
     db = client.db();
     console.log('Connected to MongoDB');

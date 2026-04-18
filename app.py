@@ -4,6 +4,8 @@ EatWise — metabolic-first PCOS support (Streamlit).
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 from typing import Any
 
@@ -13,6 +15,7 @@ from dotenv import load_dotenv
 from label_vision import analyze_label_image
 from medical_pdf import build_medical_summary_pdf
 from phenotype_engine import PHENOTYPE_LABELS, get_phenotype, phenotype_content
+from recipe_store import RECIPE_STEP_SCHEMA, recent_recipes, save_recipe
 
 PRIMARY = "#FFD1DC"
 BG = "#FFFFFF"
@@ -189,28 +192,8 @@ EatWise is a **soft-clinical companion**. It does not diagnose or replace medica
     )
 
 
-def _render_solution_page() -> None:
-    st.subheader("Solution")
-    st.markdown(
-        """
-**1. Phenotype survey** — Short questions about cycles, skin, stress, weight pattern, sleep, digestion, and recent birth control use. Answers map to a metabolic phenotype (Types A–D).
-
-**2. Personalized dashboard** — Root-cause framing, nutrition and movement ideas, and discussion points for clinic visits — all filtered through your phenotype.
-
-**3. Food label scanner** — Upload an ingredient label; we interpret it in the context of your phenotype (requires an OpenAI API key).
-
-Export a **medical summary PDF** when you want something concrete to bring to an appointment.
-        """
-    )
-
-
 def _render_recipes_page() -> None:
-    st.subheader("Recipes")
-    st.info(
-        "Phenotype-aligned meal ideas are on the roadmap. Until then, use **Your plan** "
-        "after the survey for nutrition guidance tailored to your type."
-    )
-    st.caption("Recipes here will be filtered by your metabolic phenotype once enabled.")
+    _render_recipes_tab()
 
 
 def _render_symptom_diary_page() -> None:
@@ -238,6 +221,7 @@ def _render_platform_app() -> None:
             if st.button("Edit my answers (retake survey)"):
                 st.session_state.survey_complete = False
                 st.session_state.wizard_step = 0
+                st.session_state.pop("_survey_insights_cache", None)
                 st.rerun()
         else:
             _render_survey_wizard()
@@ -402,6 +386,123 @@ def _render_survey_wizard() -> None:
                 st.rerun()
 
 
+def _ai_insights_keys_configured() -> bool:
+    return bool(
+        os.environ.get("GEMINI_API_KEY", "").strip() or os.environ.get("MISTRAL_API_KEY", "").strip()
+    )
+
+
+def _ensure_survey_insights(
+    survey: dict[str, Any],
+    phenotype_key: str,
+    phenotype_label: str,
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Load or fetch survey LLM bullets. Uses session cache keyed by survey + phenotype.
+
+    Returns ``(insights, error_message)``. ``error_message`` is set only when API keys
+    are present but the request or parse failed. When keys are missing, returns
+    ``(None, None)``.
+    """
+    sig = hashlib.sha256(
+        json.dumps({"survey": survey, "key": phenotype_key}, sort_keys=True, default=str).encode()
+    ).hexdigest()
+    cache = st.session_state.get("_survey_insights_cache")
+    if isinstance(cache, dict) and cache.get("sig") == sig:
+        if cache.get("_fetch_failed"):
+            return None, str(cache.get("_fetch_error") or "Request failed")
+        return cache.get("insights"), None
+
+    if not _ai_insights_keys_configured():
+        return None, None
+
+    from survey_insights import fetch_survey_insights
+
+    try:
+        insights = fetch_survey_insights(survey, phenotype_key, phenotype_label)
+        st.session_state["_survey_insights_cache"] = {
+            "sig": sig,
+            "insights": insights,
+            "_fetch_failed": False,
+        }
+        return insights, None
+    except Exception as e:
+        st.session_state["_survey_insights_cache"] = {
+            "sig": sig,
+            "insights": None,
+            "_fetch_failed": True,
+            "_fetch_error": str(e),
+        }
+        return None, str(e)
+
+
+def _render_solution_page() -> None:
+    st.subheader("Solution")
+    st.markdown(
+        """
+**1. Phenotype survey** — Short questions about cycles, skin, stress, weight pattern, sleep, digestion, and recent birth control use. Answers map to a metabolic phenotype (Types A–D).
+
+**2. Personalized dashboard** — Root-cause framing, nutrition and movement ideas, and discussion points for clinic visits — all filtered through your phenotype.
+
+**3. Food label scanner** — Upload an ingredient label; we interpret it in the context of your phenotype (requires an OpenAI API key).
+
+Export a **medical summary PDF** from the dashboard when you want something concrete to bring to an appointment.
+        """
+    )
+
+    if not st.session_state.survey_complete:
+        st.info(
+            "Use **Discover Your Recommendations** on the home page to complete the survey. "
+            "Then return here for AI nutrition highlights matched to your answers."
+        )
+        return
+
+    key = st.session_state.phenotype_key
+    survey = st.session_state.survey
+    if not key or not survey:
+        st.warning("Survey state is incomplete. Finish the phenotype survey from the home flow.")
+        return
+
+    label = PHENOTYPE_LABELS[key]
+    st.divider()
+    st.markdown(f"**Your phenotype:** {label}")
+
+    if not _ai_insights_keys_configured():
+        st.caption(
+            "Add `GEMINI_API_KEY` or `MISTRAL_API_KEY` to `.env` to show personalized bullets here "
+            "(same output as the PDF add-on)."
+        )
+        return
+
+    with st.spinner("Loading personalized nutrition highlights…"):
+        insights, err = _ensure_survey_insights(survey, key, label)
+
+    if err:
+        st.warning(
+            f"Could not load AI highlights ({err}). Check your API key and network, then refresh this page."
+        )
+        return
+
+    if not insights:
+        return
+
+    st.markdown("#### Three things to know")
+    for item in insights.get("must_know") or []:
+        st.markdown(f"- {item}")
+    st.markdown("")
+
+    st.markdown("#### Ingredients and additives to emphasize avoiding")
+    for item in insights.get("avoid_ingredients") or []:
+        st.markdown(f"- {item}")
+    st.markdown("")
+
+    st.markdown("#### Foods and patterns that may support your symptoms")
+    for item in insights.get("good_for_symptoms") or []:
+        st.markdown(f"- {item}")
+    st.caption(
+        "Generated with Gemini or Mistral from your survey and phenotype. For discussion with your clinician, not a diagnosis."
+    )
+
+
 def _render_dashboard() -> None:
     key = st.session_state.phenotype_key
     survey = st.session_state.survey
@@ -426,7 +527,23 @@ def _render_dashboard() -> None:
         st.markdown(pc["nutrition_movement"])
 
     st.divider()
-    pdf_bytes = build_medical_summary_pdf(survey, key)
+    insights: dict[str, Any] | None = None
+    insight_err: str | None = None
+    if _ai_insights_keys_configured():
+        with st.spinner("Generating AI nutrition highlights for your PDF…"):
+            insights, insight_err = _ensure_survey_insights(survey, key, label)
+        if insight_err:
+            st.warning(
+                f"Could not add AI highlights to the PDF ({insight_err}). "
+                "The export still includes your survey and phenotype content."
+            )
+    else:
+        st.caption(
+            "Optional: set `GEMINI_API_KEY` or `MISTRAL_API_KEY` in `.env` to append AI nutrition bullets "
+            "(must-know points, avoid list, symptom-friendly foods) to the PDF."
+        )
+
+    pdf_bytes = build_medical_summary_pdf(survey, key, insights=insights)
     st.download_button(
         "Export medical summary (PDF)",
         data=pdf_bytes,
@@ -441,6 +558,7 @@ def _render_dashboard() -> None:
         st.session_state.survey = {}
         st.session_state.phenotype_key = None
         st.session_state.wizard_step = 0
+        st.session_state.pop("_survey_insights_cache", None)
         st.rerun()
 
 
@@ -466,6 +584,108 @@ def _render_scanner_sidebar() -> None:
                 st.session_state["last_scan_result"] = f"Error: {e}"
     if st.session_state.get("last_scan_result"):
         st.markdown(st.session_state["last_scan_result"])
+
+
+def _render_recipes_tab() -> None:
+    st.subheader("Recipes")
+    st.caption("Ideas saved to local **`data/recipes.json`** (bundled examples + your adds). Not medical advice.")
+
+    with st.form("recipe_form", clear_on_submit=True):
+        name = st.text_input("Recipe name", max_chars=200, placeholder="e.g. PCOS flaxseed smoothie")
+        ingredients = st.text_area(
+            "Ingredients",
+            height=120,
+            placeholder="List main ingredients (one per line is fine).",
+        )
+        st.markdown("**Steps** (same choices for all users — easy to compare and filter later)")
+        step_choices: dict[str, str] = {}
+        for key, label, options in RECIPE_STEP_SCHEMA:
+            step_choices[key] = st.selectbox(label, options, key=f"recipe_step_{key}")
+        goals_fit = st.text_area(
+            "How it fits your goals",
+            height=100,
+            placeholder="e.g. Keeps me full until lunch, aligns with my insulin-resistance lens…",
+        )
+        st.markdown("**PCOS-oriented flags** (`pcos_rules` in JSON)")
+        c1, c2 = st.columns(2)
+        with c1:
+            low_gi = st.checkbox("Low glycemic emphasis", value=True)
+        with c2:
+            anti_inflam = st.checkbox("Anti-inflammatory emphasis", value=True)
+        fiber = st.number_input("Fiber (grams, approximate per serving)", min_value=0.0, max_value=120.0, value=0.0, step=1.0)
+        nick = st.text_input("Display name (optional)", max_chars=80)
+        submitted = st.form_submit_button("Save recipe")
+
+    if submitted:
+        if not (name or "").strip():
+            st.error("Please add a recipe name.")
+        else:
+            with st.spinner("Saving…"):
+                try:
+                    save_recipe(
+                        name,
+                        ingredients or "",
+                        step_choices,
+                        goals_fit or "",
+                        low_gi=low_gi,
+                        anti_inflammatory=anti_inflam,
+                        fiber_grams=fiber,
+                        phenotype_key=st.session_state.get("phenotype_key"),
+                        display_name=nick,
+                        status="Submitted",
+                    )
+                    st.success("Saved.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(str(e))
+
+    st.divider()
+    st.markdown("#### Recent recipes")
+    try:
+        with st.spinner("Loading…"):
+            rows = recent_recipes(24)
+        if not rows:
+            st.info("No recipes in `data/recipes.json` yet—add one above.")
+        else:
+            for row in rows:
+                who = row.get("display_name") or "Anonymous"
+                ph = row.get("phenotype_key")
+                extra = f" · lens `{ph}`" if ph else ""
+                ts = row.get("created_at")
+                if isinstance(ts, str) and ts:
+                    ts_s = ts.replace("+00:00", "Z")[:19] + " UTC"
+                elif hasattr(ts, "strftime"):
+                    ts_s = ts.strftime("%Y-%m-%d %H:%M UTC")
+                else:
+                    ts_s = "—"
+                pr = row.get("pcos_rules") or {}
+                flags = (
+                    f"low GI: {pr.get('low_gi')} · anti-inflammatory: {pr.get('anti_inflammatory')} · "
+                    f"fiber ~{pr.get('fiber_grams')} g"
+                )
+                sd = row.get("steps") or {}
+                with st.container(border=True):
+                    st.markdown(
+                        f"**{row['title']}** · `{row.get('status') or '—'}` · _{who}_{extra}_ · _{ts_s}_"
+                    )
+                    st.caption(flags)
+                    if row.get("ingredients"):
+                        st.markdown("**Ingredients**")
+                        st.write(row["ingredients"])
+                    if any(sd.get(k) for k, _, _ in RECIPE_STEP_SCHEMA):
+                        st.markdown("**Steps (rule-based)**")
+                        for key, label, _opts in RECIPE_STEP_SCHEMA:
+                            v = sd.get(key)
+                            if v:
+                                st.write(f"- **{label}:** {v}")
+                    if row.get("goals_fit"):
+                        st.markdown("**How it fits your goals**")
+                        st.write(row["goals_fit"])
+                    if row.get("notes") and not row.get("ingredients"):
+                        st.markdown("**Notes (legacy)**")
+                        st.write(row["notes"])
+    except Exception as e:
+        st.error(f"Could not load recipes: {e}")
 
 
 def main() -> None:

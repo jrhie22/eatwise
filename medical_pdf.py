@@ -29,8 +29,26 @@ class _EatWisePDF(FPDF):
         self.cell(0, 10, f"Page {self.page_no()}/{{nb}}", align="C")
 
 
-def build_medical_summary_pdf(survey: dict[str, Any], phenotype_key: str) -> bytes:
-    """Generate PDF bytes for clinician handoff."""
+def _pdf_bullet_block(pdf: FPDF, title: str, items: list[str]) -> None:
+    if not items:
+        return
+    pdf.ln(2)
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(40, 40, 40)
+    pdf.cell(0, 8, _pdf_text(title), ln=True)
+    pdf.set_font("Helvetica", "", 10)
+    for it in items:
+        pdf.multi_cell(0, 5, _pdf_text(f"- {it}"))
+        pdf.set_x(pdf.l_margin)
+
+
+def build_medical_summary_pdf(
+    survey: dict[str, Any],
+    phenotype_key: str,
+    *,
+    insights: dict[str, Any] | None = None,
+) -> bytes:
+    """Generate PDF bytes for clinician handoff. Optional ``insights`` from Gemini/Mistral survey pass."""
     label = PHENOTYPE_LABELS[phenotype_key]
     pc = phenotype_content(phenotype_key)
 
@@ -99,6 +117,28 @@ def build_medical_summary_pdf(survey: dict[str, Any], phenotype_key: str) -> byt
     pdf.set_font("Helvetica", "", 10)
     pdf.multi_cell(0, 5, _pdf_text(_strip_md(pc["nutrition_movement"])))
     pdf.set_x(pdf.l_margin)
+
+    if insights:
+        pdf.add_page()
+        pdf.set_y(pdf.t_margin)
+        pdf.set_text_color(40, 40, 40)
+        pdf.set_font("Helvetica", "B", 12)
+        pdf.cell(0, 8, "AI-assisted nutrition highlights (for discussion)", ln=True)
+        pdf.set_font("Helvetica", "I", 9)
+        pdf.set_text_color(90, 90, 90)
+        pdf.multi_cell(
+            0,
+            4,
+            _pdf_text(
+                "Generated from your survey + phenotype using an LLM (Gemini or Mistral). "
+                "Not individualized medical advice; confirm with your clinician."
+            ),
+        )
+        pdf.set_x(pdf.l_margin)
+        pdf.set_text_color(40, 40, 40)
+        _pdf_bullet_block(pdf, "Three things to know", list(insights.get("must_know") or []))
+        _pdf_bullet_block(pdf, "Ingredients / additives to emphasize avoiding", list(insights.get("avoid_ingredients") or []))
+        _pdf_bullet_block(pdf, "Foods and patterns that may support your symptoms", list(insights.get("good_for_symptoms") or []))
 
     pdf.ln(6)
     pdf.set_font("Helvetica", "I", 9)
