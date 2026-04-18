@@ -108,6 +108,14 @@ def _ensure_openai_key() -> None:
     except (FileNotFoundError, KeyError):
         pass
 
+def _ensure_anthropic_key() -> None:
+    load_dotenv()
+    try:
+        k = st.secrets["ANTHROPIC_API_KEY"]
+        if k:
+            os.environ["ANTHROPIC_API_KEY"] = str(k)
+    except (FileNotFoundError, KeyError):
+        pass
 
 def _init_session() -> None:
     defaults: dict[str, Any] = {
@@ -214,13 +222,8 @@ def _render_recipes_page() -> None:
 
 
 def _render_symptom_diary_page() -> None:
-    st.subheader("Symptom Diary")
-    st.markdown(
-        """
-Log cycle changes, skin flares, energy, sleep, and stress — so you can see patterns over time **in one place** alongside your phenotype. This feature is coming next.
-        """
-    )
-    st.info("Symptom logging will connect to your dashboard for richer, longitudinal context.")
+    from symptom_diary import render_symptom_diary
+    render_symptom_diary()
 
 
 def _render_platform_app() -> None:
