@@ -72,6 +72,27 @@ def _inject_soft_clinical_css() -> None:
                 font-weight: 600;
                 margin-bottom: 0.75rem;
             }}
+            .eatwise-hero {{
+                background: linear-gradient(180deg, #FFF5F7 0%, #FFFFFF 55%);
+                border: 1px solid #F5E0E6;
+                border-radius: 16px;
+                padding: 2rem 2.25rem;
+                margin-bottom: 1.5rem;
+            }}
+            .eatwise-hero-tagline {{
+                font-size: 0.95rem;
+                font-weight: 600;
+                letter-spacing: 0.02em;
+                color: #C2185B;
+                margin-bottom: 0.75rem;
+            }}
+            .eatwise-hero h2 {{
+                margin-top: 0 !important;
+                line-height: 1.25 !important;
+            }}
+            .eatwise-type-grid p {{
+                margin: 0.35rem 0;
+            }}
         </style>
         """,
         unsafe_allow_html=True,
@@ -94,10 +115,161 @@ def _init_session() -> None:
         "survey_complete": False,
         "survey": {},
         "phenotype_key": None,
+        "eatwise_view": "landing",
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
+
+
+def _render_nav() -> None:
+    current = st.session_state.get("eatwise_view", "landing")
+    nav_items: list[tuple[str, str]] = [
+        ("Home", "landing"),
+        ("About", "about"),
+        ("Solution", "solution"),
+        ("Recipes", "recipes"),
+        ("Symptom Diary", "symptom_diary"),
+    ]
+    c_logo, c1, c2, c3, c4, c5 = st.columns([1.35, 1, 1, 1, 1.15, 1.15], gap="small")
+    with c_logo:
+        st.markdown("### EatWise")
+    for col, (label, key) in zip((c1, c2, c3, c4, c5), nav_items, strict=True):
+        with col:
+            active = current == key
+            if st.button(
+                label,
+                key=f"nav_{key}",
+                type="primary" if active else "secondary",
+                use_container_width=True,
+            ):
+                if current != key:
+                    st.session_state.eatwise_view = key
+                    st.rerun()
+    st.divider()
+
+
+def _render_landing() -> None:
+    st.markdown(
+        """
+        <div class="eatwise-hero">
+            <div class="eatwise-hero-tagline">The first AI phenotyping platform for PCOS</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        """
+**1 in 10 women have PCOS.** Every doctor says the same thing. We don't.
+
+Take our diagnostic survey at onboarding — it clusters each user into her metabolic phenotype. Every subsequent recommendation is filtered through this lens:
+
+- **Type A: Insulin Resistant** — Weight, blood sugar, androgen spikes  
+- **Type B: Adrenal** — Cortisol dysregulation, stress response  
+- **Type C: Inflammatory** — Acne, gut health, systemic inflammation  
+- **Type D: Post-Pill** — Hormonal rebound after stopping birth control pills  
+        """
+    )
+    st.markdown("")
+    if st.button("Discover Your Recommendations", type="primary", key="landing_discover"):
+        st.session_state.eatwise_view = "platform"
+        st.rerun()
+
+
+def _render_about_page() -> None:
+    st.subheader("About EatWise")
+    st.markdown(
+        """
+EatWise is built for the majority of people with PCOS who are told the same generic advice — lose weight, go on the pill — without a clear picture of **which** metabolic drivers matter for *you*.
+
+We use a structured onboarding survey to sort patterns into phenotypes, not labels. The goal is practical: recommendations you can discuss with your clinician and live with day to day.
+
+EatWise is a **soft-clinical companion**. It does not diagnose or replace medical care.
+        """
+    )
+
+
+def _render_solution_page() -> None:
+    st.subheader("Solution")
+    st.markdown(
+        """
+**1. Phenotype survey** — Short questions about cycles, skin, stress, weight pattern, sleep, digestion, and recent birth control use. Answers map to a metabolic phenotype (Types A–D).
+
+**2. Personalized dashboard** — Root-cause framing, nutrition and movement ideas, and discussion points for clinic visits — all filtered through your phenotype.
+
+**3. Food label scanner** — Upload an ingredient label; we interpret it in the context of your phenotype (requires an OpenAI API key).
+
+Export a **medical summary PDF** when you want something concrete to bring to an appointment.
+        """
+    )
+
+
+def _render_recipes_page() -> None:
+    st.subheader("Recipes")
+    st.info(
+        "Phenotype-aligned meal ideas are on the roadmap. Until then, use **Your plan** "
+        "after the survey for nutrition guidance tailored to your type."
+    )
+    st.caption("Recipes here will be filtered by your metabolic phenotype once enabled.")
+
+
+def _render_symptom_diary_page() -> None:
+    st.subheader("Symptom Diary")
+    st.markdown(
+        """
+Log cycle changes, skin flares, energy, sleep, and stress — so you can see patterns over time **in one place** alongside your phenotype. This feature is coming next.
+        """
+    )
+    st.info("Symptom logging will connect to your dashboard for richer, longitudinal context.")
+
+
+def _render_platform_app() -> None:
+    st.caption("Metabolic health for PCOS — a soft-clinical companion, not a substitute for your clinician.")
+
+    with st.sidebar:
+        st.markdown("### Metabolic lens")
+        _render_scanner_sidebar()
+
+    tab_home, tab_dash, tab_scan = st.tabs(["Phenotype survey", "Dashboard", "Food label scanner"])
+
+    with tab_home:
+        if st.session_state.survey_complete:
+            st.success("Survey complete. Open **Dashboard** for your plan, or **Food label scanner** to check products.")
+            if st.button("Edit my answers (retake survey)"):
+                st.session_state.survey_complete = False
+                st.session_state.wizard_step = 0
+                st.rerun()
+        else:
+            _render_survey_wizard()
+
+    with tab_dash:
+        if not st.session_state.survey_complete:
+            st.info("Complete the **Phenotype survey** tab first.")
+        else:
+            _render_dashboard()
+
+    with tab_scan:
+        _ensure_openai_key()
+        if not st.session_state.survey_complete:
+            st.info("Complete the survey so we can analyze labels in the context of your phenotype.")
+        elif not os.environ.get("OPENAI_API_KEY"):
+            st.warning(
+                "Set `OPENAI_API_KEY` in a `.env` file in this folder or in `.streamlit/secrets.toml`."
+            )
+        else:
+            st.subheader("Upload a food ingredient label")
+            st.caption("Uses GPT-4o-mini vision. Photos with clear ingredient lists work best.")
+            f = st.file_uploader("Image", type=["png", "jpg", "jpeg", "webp"], key="main_upload")
+            if f and st.button("Analyze with my phenotype", type="primary", key="main_analyze"):
+                data = f.getvalue()
+                mime = f.type or "image/jpeg"
+                with st.spinner("Reading label..."):
+                    try:
+                        result = analyze_label_image(data, mime, st.session_state.phenotype_key)
+                        st.markdown(result)
+                        st.session_state["last_scan_result"] = result
+                    except Exception as e:
+                        st.error(str(e))
 
 
 def _render_survey_wizard() -> None:
@@ -307,53 +479,21 @@ def main() -> None:
     _ensure_openai_key()
     _init_session()
 
-    st.title("EatWise")
-    st.caption("Metabolic health for PCOS — a soft-clinical companion, not a substitute for your clinician.")
+    _render_nav()
 
-    with st.sidebar:
-        st.markdown("### Metabolic lens")
-        _render_scanner_sidebar()
-
-    tab_home, tab_dash, tab_scan = st.tabs(["Phenotype survey", "Dashboard", "Food label scanner"])
-
-    with tab_home:
-        if st.session_state.survey_complete:
-            st.success("Survey complete. Open **Dashboard** for your plan, or **Food label scanner** to check products.")
-            if st.button("Edit my answers (retake survey)"):
-                st.session_state.survey_complete = False
-                st.session_state.wizard_step = 0
-                st.rerun()
-        else:
-            _render_survey_wizard()
-
-    with tab_dash:
-        if not st.session_state.survey_complete:
-            st.info("Complete the **Phenotype survey** tab first.")
-        else:
-            _render_dashboard()
-
-    with tab_scan:
-        _ensure_openai_key()
-        if not st.session_state.survey_complete:
-            st.info("Complete the survey so we can analyze labels in the context of your phenotype.")
-        elif not os.environ.get("OPENAI_API_KEY"):
-            st.warning(
-                "Set `OPENAI_API_KEY` in a `.env` file in this folder or in `.streamlit/secrets.toml`."
-            )
-        else:
-            st.subheader("Upload a food ingredient label")
-            st.caption("Uses GPT-4o-mini vision. Photos with clear ingredient lists work best.")
-            f = st.file_uploader("Image", type=["png", "jpg", "jpeg", "webp"], key="main_upload")
-            if f and st.button("Analyze with my phenotype", type="primary", key="main_analyze"):
-                data = f.getvalue()
-                mime = f.type or "image/jpeg"
-                with st.spinner("Reading label..."):
-                    try:
-                        result = analyze_label_image(data, mime, st.session_state.phenotype_key)
-                        st.markdown(result)
-                        st.session_state["last_scan_result"] = result
-                    except Exception as e:
-                        st.error(str(e))
+    view = st.session_state.get("eatwise_view", "landing")
+    if view == "landing":
+        _render_landing()
+    elif view == "about":
+        _render_about_page()
+    elif view == "solution":
+        _render_solution_page()
+    elif view == "recipes":
+        _render_recipes_page()
+    elif view == "symptom_diary":
+        _render_symptom_diary_page()
+    else:
+        _render_platform_app()
 
 
 if __name__ == "__main__":
