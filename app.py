@@ -387,9 +387,7 @@ def _render_survey_wizard() -> None:
 
 
 def _ai_insights_keys_configured() -> bool:
-    return bool(
-        os.environ.get("GEMINI_API_KEY", "").strip() or os.environ.get("MISTRAL_API_KEY", "").strip()
-    )
+    return bool(os.environ.get("MISTRAL_API_KEY", "").strip())
 
 
 def _ensure_survey_insights(
@@ -436,10 +434,10 @@ def _ensure_survey_insights(
 
 
 def _render_solution_page() -> None:
-    st.subheader("Solution")
+    st.subheader("Solution - Different ways you can explore")
     st.markdown(
         """
-**1. Phenotype survey** — Short questions about cycles, skin, stress, weight pattern, sleep, digestion, and recent birth control use. Answers map to a metabolic phenotype (Types A–D).
+**1. Phenotype survey** — Answer our short questions about cycles, skin, stress, weight pattern, sleep, digestion, and recent birth control use. Answers map to a metabolic phenotype (Types A–D).
 
 **2. Personalized dashboard** — Root-cause framing, nutrition and movement ideas, and discussion points for clinic visits — all filtered through your phenotype.
 
@@ -468,8 +466,7 @@ Export a **medical summary PDF** from the dashboard when you want something conc
 
     if not _ai_insights_keys_configured():
         st.caption(
-            "Add `GEMINI_API_KEY` or `MISTRAL_API_KEY` to `.env` to show personalized bullets here "
-            "(same output as the PDF add-on)."
+            "Add `MISTRAL_API_KEY` to `.env` to show three grounded advice bullets here (same output as the PDF add-on)."
         )
         return
 
@@ -485,21 +482,13 @@ Export a **medical summary PDF** from the dashboard when you want something conc
     if not insights:
         return
 
-    st.markdown("#### Three things to know")
-    for item in insights.get("must_know") or []:
-        st.markdown(f"- {item}")
-    st.markdown("")
-
-    st.markdown("#### Ingredients and additives to emphasize avoiding")
-    for item in insights.get("avoid_ingredients") or []:
-        st.markdown(f"- {item}")
-    st.markdown("")
-
-    st.markdown("#### Foods and patterns that may support your symptoms")
-    for item in insights.get("good_for_symptoms") or []:
+    bullets = list(insights.get("general_advice") or insights.get("must_know") or [])
+    st.markdown("#### AI-Powered General advice (Based on your Initial Answers)")
+    for item in bullets[:3]:
         st.markdown(f"- {item}")
     st.caption(
-        "Generated with Gemini or Mistral from your survey and phenotype. For discussion with your clinician, not a diagnosis."
+        "Three bullets from Mistral AI, grounded in the same text as your PDF. "
+        "For discussion with your clinician, not a diagnosis."
     )
 
 
@@ -539,8 +528,7 @@ def _render_dashboard() -> None:
             )
     else:
         st.caption(
-            "Optional: set `GEMINI_API_KEY` or `MISTRAL_API_KEY` in `.env` to append AI nutrition bullets "
-            "(must-know points, avoid list, symptom-friendly foods) to the PDF."
+            "Optional: set `MISTRAL_API_KEY` in `.env` to append three grounded general-advice bullets to the PDF."
         )
 
     pdf_bytes = build_medical_summary_pdf(survey, key, insights=insights)

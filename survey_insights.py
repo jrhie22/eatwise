@@ -1,4 +1,4 @@
-"""Mistral: JSON bullets for the medical PDF from survey + phenotype."""
+"""Mistral: three grounded general-advice bullets for the PDF from survey + EatWise doc text."""
 from __future__ import annotations
 
 import json
@@ -6,7 +6,13 @@ import os
 import re
 from typing import Any
 
+from phenotype_engine import phenotype_content
+
 _JSON = re.compile(r"```(?:json)?\s*([\s\S]*?)```")
+
+
+def _strip_md(s: str) -> str:
+    return str(s).replace("**", "")
 
 
 def _parse_json(text: str) -> dict[str, Any]:
@@ -17,70 +23,106 @@ def _parse_json(text: str) -> dict[str, Any]:
     return json.loads(t)
 
 
+def _build_eatwise_doc_for_prompt(
+    survey: dict[str, Any],
+    phenotype_key: str,
+    phenotype_label: str,
+) -> str:
+    """Same narrative blocks that appear in the medical PDF, so the model stays on-document."""
+    pc = phenotype_content(phenotype_key)
+    survey_lines = [
+        f"Cycle regularity: {survey.get('cycle_regularity', '')}",
+        f"Acne severity: {survey.get('acne_severity', '')}",
+        f"Hair thinning: {survey.get('hair_thinning', '')}",
+        f"BMI: {survey.get('bmi', '')}",
+        f"Stress level (1-5): {survey.get('stress_level', '')}",
+        f"Energy level (1-5): {survey.get('energy_level', '')}",
+        f"Sugar cravings: {survey.get('sugar_cravings', '')}",
+        f"Weight pattern: {survey.get('weight_pattern', '')}",
+        f"Sleep difficulty: {survey.get('sleep_trouble', '')}",
+        f"Digestive issues: {survey.get('digestive_issues', '')}",
+        f"Joint pain: {survey.get('joint_pain', '')}",
+        f"Recent hormonal birth control discontinuation: {survey.get('post_pill', '')}",
+    ]
+    return "\n".join(
+        [
+            f"Metabolic phenotype: {phenotype_label} (code {phenotype_key})",
+            "",
+            "Patient-reported snapshot (PDF labels):",
+            "\n".join(survey_lines),
+            "",
+            "Full survey JSON (detail):",
+            json.dumps(survey, indent=2, default=str),
+            "",
+            "--- EatWise educational text from the PDF (stay consistent with this) ---",
+            "",
+            "Root cause (patient education):",
+            _strip_md(pc["root_cause"]),
+            "",
+            "Lifestyle and supplement topics for discussion:",
+            _strip_md(pc["protocols"]),
+            "",
+            "Nutrition & movement emphasis:",
+            _strip_md(pc["nutrition_movement"]),
+        ]
+    )
+
+
 def fetch_survey_insights(
     survey: dict[str, Any],
     phenotype_key: str,
     phenotype_label: str,
 ) -> dict[str, Any]:
-    """Returns must_know (3), avoid_ingredients, good_for_symptoms lists. Raises on API/parse errors."""
-    body = json.dumps(survey, indent=2, default=str)
-    prompt = f"""Clinical nutrition educator (not diagnosing). PCOS type: {phenotype_label} (code {phenotype_key}).
-Survey JSON:
-{body}
+    """Returns ``general_advice``: exactly 3 strings grounded in the EatWise PDF document. Raises if no API key or API/parse fails."""
+    doc = _build_eatwise_doc_for_prompt(survey, phenotype_key, phenotype_label)
+    prompt = f"""You are a clinical nutrition educator (not diagnosing). Read ONLY the EatWise patient summary below.
 
-Return ONLY JSON with:
-- must_know: array of exactly 3 short strings (key things this patient should understand)
-- avoid_ingredients: array of 5-8 concrete ingredients or additive categories to limit
-- good_for_symptoms: array of 5-8 foods or eating patterns that tend to support this profile
+Write exactly 3 short bullet points of practical GENERAL advice the patient can discuss with her clinician. Each bullet must align with the document below — do not contradict it, do not invent a diagnosis, and do not introduce brand-new medical claims that are absent from this framing.
 
-Plain strings, no markdown."""
+EatWise summary:
+---
+{doc}
+---
 
-    if os.environ.get("GEMINI_API_KEY", "").strip():
-        import google.generativeai as genai
+Return ONLY valid JSON in this exact shape:
+{{"general_advice": ["first bullet", "second bullet", "third bullet"]}}
 
-        genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-        r = genai.GenerativeModel("gemini-1.5-flash").generate_content(prompt)
-        raw_txt = (getattr(r, "text", None) or "").strip()
-        if not raw_txt and getattr(r, "candidates", None):
-            parts = getattr(r.candidates[0].content, "parts", None) or []
-            raw_txt = "".join(getattr(p, "text", "") or "" for p in parts).strip()
-        if not raw_txt:
-            raise RuntimeError("Gemini returned no text (safety filter or empty response).")
-        return _normalize_insights(_parse_json(raw_txt))
+Plain strings inside the array, no markdown."""
 
     if os.environ.get("MISTRAL_API_KEY", "").strip():
-        from mistralai import Mistral
+        api_key = os.environ["MISTRAL_API_KEY"]
+        try:
+            from mistralai.client import Mistral  # mistralai v2.x
+        except ImportError:
+            from mistralai import Mistral  # mistralai v0.x / v1.x
 
-        cl = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
-        r = cl.chat.complete(
-            model="mistral-small-latest",
+        client = Mistral(api_key=api_key)
+        chat_response = client.chat.complete(
+            model="mistral-medium-2508",
             messages=[{"role": "user", "content": prompt}],
         )
-        return _normalize_insights(_parse_json(r.choices[0].message.content or "{}"))
+        raw_txt = (chat_response.choices[0].message.content or "").strip()
+        return _normalize_general_advice(_parse_json(raw_txt))
 
-    raise RuntimeError("Set GEMINI_API_KEY or MISTRAL_API_KEY for AI PDF add-on.")
+    raise RuntimeError("Set MISTRAL_API_KEY for AI PDF add-on.")
 
 
-def _normalize_insights(raw: dict[str, Any]) -> dict[str, Any]:
+def _normalize_general_advice(raw: dict[str, Any]) -> dict[str, Any]:
     def _lst(x: Any, nmax: int) -> list[str]:
         if x is None:
             return []
         if isinstance(x, str):
             return [_strip_one(x)][:nmax]
         if isinstance(x, list):
-            out = [_strip_one(str(i)) for i in x if str(i).strip()]
-            return out[:nmax]
+            return [_strip_one(str(i)) for i in x if str(i).strip()][:nmax]
         return []
 
     def _strip_one(s: str) -> str:
         return s.strip().replace("\n", " ")[:500]
 
-    mk = _lst(raw.get("must_know"), 10)
-    while len(mk) < 3:
-        mk.append("Discuss individualized nutrition targets with your clinician.")
-    mk = mk[:3]
-    return {
-        "must_know": mk,
-        "avoid_ingredients": _lst(raw.get("avoid_ingredients"), 12),
-        "good_for_symptoms": _lst(raw.get("good_for_symptoms"), 12),
-    }
+    ga = _lst(raw.get("general_advice"), 10)
+    if len(ga) < 3 and raw.get("must_know"):
+        ga = _lst(raw.get("must_know"), 10)
+    while len(ga) < 3:
+        ga.append("Discuss how to personalize these themes with your clinician.")
+    return {"general_advice": ga[:3]}

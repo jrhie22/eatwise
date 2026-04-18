@@ -48,7 +48,7 @@ def build_medical_summary_pdf(
     *,
     insights: dict[str, Any] | None = None,
 ) -> bytes:
-    """Generate PDF bytes for clinician handoff. Optional ``insights`` from Gemini/Mistral survey pass."""
+    """Generate PDF bytes for clinician handoff. Optional ``insights`` with ``general_advice`` (3 bullets) from Mistral."""
     label = PHENOTYPE_LABELS[phenotype_key]
     pc = phenotype_content(phenotype_key)
 
@@ -118,27 +118,26 @@ def build_medical_summary_pdf(
     pdf.multi_cell(0, 5, _pdf_text(_strip_md(pc["nutrition_movement"])))
     pdf.set_x(pdf.l_margin)
 
-    if insights:
+    advice = list(insights.get("general_advice") or insights.get("must_know") or [])[:3] if insights else []
+    if advice:
         pdf.add_page()
         pdf.set_y(pdf.t_margin)
         pdf.set_text_color(40, 40, 40)
         pdf.set_font("Helvetica", "B", 12)
-        pdf.cell(0, 8, "AI-assisted nutrition highlights (for discussion)", ln=True)
+        pdf.cell(0, 8, "General advice (for discussion)", ln=True)
         pdf.set_font("Helvetica", "I", 9)
         pdf.set_text_color(90, 90, 90)
         pdf.multi_cell(
             0,
             4,
             _pdf_text(
-                "Generated from your survey + phenotype using an LLM (Gemini or Mistral). "
-                "Not individualized medical advice; confirm with your clinician."
+                "Three bullets grounded in your EatWise summary (survey + PDF framing), "
+                "via Mistral. Not a diagnosis; confirm with your clinician."
             ),
         )
         pdf.set_x(pdf.l_margin)
         pdf.set_text_color(40, 40, 40)
-        _pdf_bullet_block(pdf, "Three things to know", list(insights.get("must_know") or []))
-        _pdf_bullet_block(pdf, "Ingredients / additives to emphasize avoiding", list(insights.get("avoid_ingredients") or []))
-        _pdf_bullet_block(pdf, "Foods and patterns that may support your symptoms", list(insights.get("good_for_symptoms") or []))
+        _pdf_bullet_block(pdf, "Key points", advice)
 
     pdf.ln(6)
     pdf.set_font("Helvetica", "I", 9)

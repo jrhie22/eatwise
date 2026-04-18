@@ -4,7 +4,10 @@ import json
 import os
 import re
 
-from mistralai import Mistral
+try:
+    from mistralai.client import Mistral  # mistralai v2.x
+except ImportError:
+    from mistralai import Mistral  # mistralai v0.x / v1.x
 
 _JSON = re.compile(r"```(?:json)?\s*([\s\S]*?)```")
 
