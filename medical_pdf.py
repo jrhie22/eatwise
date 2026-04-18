@@ -77,6 +77,17 @@ def build_medical_summary_pdf(
     pdf.cell(0, 8, "Patient-reported snapshot", ln=True)
     pdf.set_font("Helvetica", "", 10)
 
+    # General info at the top
+    general_info = [
+        f"Name: {survey.get('name', '')}",
+        f"Age: {survey.get('age', '')}",
+        f"Country: {survey.get('country', '')}",
+        f"Ethnicity: {survey.get('ethnicity', '')}",
+    ]
+    for line in general_info:
+        pdf.multi_cell(0, 5, _pdf_text(str(line)))
+        pdf.set_x(pdf.l_margin)
+    pdf.ln(2)
     lines = [
         f"Date: {date.today().isoformat()}",
         f"Metabolic phenotype (app-derived): {label}",
@@ -153,7 +164,7 @@ def build_medical_summary_pdf(
     )
 
     raw = pdf.output(dest="S")
-    return bytes(raw)
+    return raw.encode("latin-1")
 
 
 def _strip_md(text: str) -> str:
