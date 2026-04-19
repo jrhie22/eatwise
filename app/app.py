@@ -122,6 +122,9 @@ def _init_session() -> None:
         "auth_user": None,
         "auth_mode": "signin",  # or "signup"
     }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
 
 
 def _render_landing() -> None:
